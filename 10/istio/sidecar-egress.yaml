@@ -1,0 +1,36 @@
+# Ограничиваем исходящий трафик из namespace webapp только зарегистрированными
+# в mesh сервисами + явно разрешёнными внешними хостами (ServiceEntry ниже).
+# Всё остальное наружу будет заблокировано sidecar-прокси Envoy.
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: default
+  namespace: webapp
+spec:
+  outboundTrafficPolicy:
+    mode: REGISTRY_ONLY
+  egress:
+    - hosts:
+        - "istio-system/*"
+        - "kube-system/*"
+        - "./*"
+---
+# Единственный внешний хост, на который webapp обязан ходить (health-check).
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: health-check-target
+  namespace: webapp
+spec:
+  hosts:
+    - "health-check.external"
+  addresses:
+    - 77.88.8.8/32
+  location: MESH_EXTERNAL
+  resolution: STATIC
+  endpoints:
+    - address: 77.88.8.8
+  ports:
+    - number: 80
+      name: icmp-placeholder
+      protocol: TCP

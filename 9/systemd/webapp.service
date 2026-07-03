@@ -1,0 +1,20 @@
+[Unit]
+Description=Test webapp (FastAPI)
+After=network.target
+
+[Service]
+Type=simple
+User=webapp
+Group=webapp
+WorkingDirectory=/opt/webapp
+ExecStart=/opt/webapp/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/webapp
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

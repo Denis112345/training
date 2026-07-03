@@ -1,0 +1,62 @@
+# L3/L4 egress-политика для namespace webapp: разрешаем только DNS (kube-system/coredns),
+# ICMP на 77.88.8.8 (health-check) и HTTP/TCP внутрь mesh (istiod, other webapp pods).
+# Всё остальное исходящее из подов webapp - запрещено (Cilium default-deny при наличии
+# хотя бы одной egress-политики, выбирающей под).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: webapp-egress-restrict
+  namespace: webapp
+spec:
+  endpointSelector:
+    matchLabels:
+      app: webapp
+  egress:
+    # DNS
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    # health-check ICMP на строго заданный внешний адрес
+    - toCIDR:
+        - 77.88.8.8/32
+      icmps:
+        - fields:
+            - type: 8
+              family: IPv4
+    # трафик к istiod (control plane сайдкаров) и внутри mesh
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: istio-system
+      toPorts:
+        - ports:
+            - port: "15012"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: webapp
+---
+# Ingress: разрешаем ходить в webapp только из ingress-nginx (внешний вход) и
+# из istio-system (health/metrics самого mesh).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: webapp-ingress-restrict
+  namespace: webapp
+spec:
+  endpointSelector:
+    matchLabels:
+      app: webapp
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: ingress-nginx
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: istio-system
